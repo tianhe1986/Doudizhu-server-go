@@ -20,7 +20,7 @@ const (
 
 type Message struct {
 	Seq     int             `json:"seq"`
-	Code    MessageCode     `json:"code"`
-	Command int             `json:"command"`
+	Code    int             `json:"code"`
+	Command MessageCode     `json:"command"`
 	Content json.RawMessage `json:"content"`
 }

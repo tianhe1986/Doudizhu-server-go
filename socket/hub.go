@@ -32,6 +32,7 @@ func NewHub() *Hub {
 }
 
 func (h *Hub) Run() {
+	gameServer := NewGameServer()
 	for {
 		select {
 		case client := <-h.register: // 新增连接
@@ -42,7 +43,7 @@ func (h *Hub) Run() {
 				close(client.send)
 			}
 		case data := <-h.dataList: // 实际的数据处理
-			switch data.message.Code {
+			switch data.message.Command {
 			case SYSTEM_MSG: // TODO: 系统类消息
 			case REGISTER:
 			case LOGIN:
@@ -51,6 +52,7 @@ func (h *Hub) Run() {
 			case PLAY_GAME:
 			case PLAYER_PLAYCARD:
 			case PLAYER_WANTDIZHU:
+				gameServer.handleMsg(data.client, &data.message)
 				break
 			default:
 				break

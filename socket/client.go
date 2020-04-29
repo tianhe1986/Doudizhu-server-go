@@ -1,7 +1,7 @@
 package socket
 
 import (
-	"bytes"
+	"encoding/json"
 	"log"
 	"time"
 
@@ -38,10 +38,27 @@ func (c *Client) readPump() {
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
 				log.Printf("error: %v", err)
 			}
+
+			// 关闭了，应该报告给中控服务器， 这个已经在defer中完成，无需重复
 			break
 		}
-		message = bytes.TrimSpace(bytes.Replace(message, newline, space, -1))
-		c.hub.broadcast <- message
+
+		// 将消息json decode成Message，插入中控处理队列
+		realMessage := Message{}
+		err = json.Unmarshal(message, &realMessage)
+
+		//解析失败会报错。
+		if err != nil {
+			log.Printf("json decode error: %s", message)
+			continue
+		}
+
+		data := MessageChanItem{
+			client:  c,
+			message: realMessage,
+		}
+
+		c.hub.dataList <- data
 	}
 }
 

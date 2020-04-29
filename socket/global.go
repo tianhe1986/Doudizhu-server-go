@@ -20,6 +20,8 @@ const (
 
 	// Maximum message size allowed from peer.
 	maxMessageSize = 512
+
+	maxDataListSize = 1024
 )
 
 var (

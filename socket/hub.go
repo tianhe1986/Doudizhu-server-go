@@ -1,50 +1,59 @@
 package socket
 
-// Hub maintains the set of active clients and broadcasts messages to the
-// clients.
+// 游戏中消息的结构体
+type MessageChanItem struct {
+	// 对应的客户端
+	client  *Client
+	message Message
+}
+
+// 从websocket的demo中拿来的Hub类，用来做中控
 type Hub struct {
-	// Registered clients.
+	// 客户端map
 	clients map[*Client]bool
 
-	// Inbound messages from the clients.
-	broadcast chan []byte
+	// 数据消息队列，带缓冲区
+	dataList chan MessageChanItem
 
-	// Register requests from the clients.
+	// 新增连接队列
 	register chan *Client
 
-	// Unregister requests from clients.
+	// 移除连接队列
 	unregister chan *Client
-
-	// game Server
 }
 
 func NewHub() *Hub {
 	return &Hub{
-		broadcast:  make(chan []byte),
+		clients:    make(map[*Client]bool),
+		dataList:   make(chan MessageChanItem, maxDataListSize),
 		register:   make(chan *Client),
 		unregister: make(chan *Client),
-		clients:    make(map[*Client]bool),
 	}
 }
 
 func (h *Hub) Run() {
 	for {
 		select {
-		case client := <-h.register:
+		case client := <-h.register: // 新增连接
 			h.clients[client] = true
-		case client := <-h.unregister:
-			if _, ok := h.clients[client]; ok {
+		case client := <-h.unregister: // 关闭连接
+			if _, ok := h.clients[client]; ok { // TODO: 从排队队列中移除
 				delete(h.clients, client)
 				close(client.send)
 			}
-		case message := <-h.broadcast:
-			for client := range h.clients {
-				select {
-				case client.send <- message:
-				default:
-					close(client.send)
-					delete(h.clients, client)
-				}
+		case data := <-h.dataList: // 实际的数据处理
+			switch data.message.Code {
+			case SYSTEM_MSG: // TODO: 系统类消息
+			case REGISTER:
+			case LOGIN:
+				break
+			case MATCH_PLAYER:
+			case PLAY_GAME:
+			case PLAYER_PLAYCARD:
+			case PLAYER_WANTDIZHU:
+				break
+			default:
+				break
 			}
 		}
 	}

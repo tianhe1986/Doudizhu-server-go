@@ -19,7 +19,7 @@ type GameServer struct {
 	queue *list.List
 
 	// 房间map
-	rooms map[int]RoomServer
+	rooms map[int]*RoomServer
 
 	// 当前最小可用房间编号
 	roomIndex int
@@ -28,7 +28,7 @@ type GameServer struct {
 func NewGameServer() *GameServer {
 	return &GameServer{
 		queue:     list.New(),
-		rooms:     make(map[int]RoomServer),
+		rooms:     make(map[int]*RoomServer),
 		roomIndex: 1,
 	}
 }
@@ -68,7 +68,7 @@ func (gameServer *GameServer) matchPlayer(client *Client, name string, seq int) 
 	gameServer.queue.PushBack(newMatchItem)
 
 	// 每三个进行处理
-	if gameServer.queue.Len() == 3 {
+	if gameServer.queue.Len() >= 3 {
 		var players []MatchItem = make([]MatchItem, 3)
 		var names []string = make([]string, 3)
 		var roomPlayers []RoomPlayItem = make([]RoomPlayItem, 3)
@@ -105,10 +105,12 @@ func (gameServer *GameServer) matchPlayer(client *Client, name string, seq int) 
 			players[i].ws.send  <- tempMsg
 		}
 
-		room := RoomServer{}
+		room := NewRoomServer()
 		room.roomId = gameServer.roomIndex;
+		room.players = roomPlayers
 		gameServer.roomIndex++;
 		gameServer.rooms[room.roomId] = room
+		room.InitGame()
 	}
 }
 

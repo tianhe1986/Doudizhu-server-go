@@ -8,7 +8,7 @@ import (
 	"Doudizhu-server-go/socket"
 )
 
-var addr = flag.String("addr", ":8080", "http service address")
+var addr = flag.String("addr", ":8181", "http service address")
 
 func serveHome(w http.ResponseWriter, r *http.Request) {
 	log.Println(r.URL)
@@ -27,8 +27,8 @@ func main() {
 	flag.Parse()
 	hub := socket.NewHub()
 	go hub.Run()
-	http.HandleFunc("/", serveHome)
-	http.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc("/test", serveHome)
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		socket.ServeWs(hub, w, r)
 	})
 	err := http.ListenAndServe(*addr, nil)

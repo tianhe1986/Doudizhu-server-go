@@ -44,14 +44,11 @@ func (h *Hub) Run() {
 			}
 		case data := <-h.dataList: // 实际的数据处理
 			switch data.message.Command {
-			case SYSTEM_MSG: // TODO: 系统类消息
-			case REGISTER:
-			case LOGIN:
+			// TODO: 系统类消息
+			case SYSTEM_MSG, REGISTER, LOGIN:
 				break
-			case MATCH_PLAYER:
-			case PLAY_GAME:
-			case PLAYER_PLAYCARD:
-			case PLAYER_WANTDIZHU:
+			// 游戏内消息
+			case MATCH_PLAYER, PLAY_GAME, PLAYER_PLAYCARD, PLAYER_WANTDIZHU:
 				gameServer.handleMsg(data.client, &data.message)
 				break
 			default:

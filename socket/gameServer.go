@@ -1,7 +1,11 @@
 package socket
 
 import (
+	"Doudizhu-server-go/game"
 	"container/list"
+	"encoding/json"
+	"log"
+	"strconv"
 )
 
 type GameServer struct {
@@ -27,7 +31,15 @@ func NewGameServer() *GameServer {
 func (gameServer *GameServer) handleMsg(client *Client, message *Message) {
 	switch message.Command {
 	case MATCH_PLAYER: // 匹配
-		gameServer.matchPlayer(client, "先占个位", message.Seq)
+
+		matchCommand := game.MatchCommand{}
+		err := json.Unmarshal(message.Content, &matchCommand)
+
+		//解析失败会报错。
+		if err != nil {
+			break
+		}
+		gameServer.matchPlayer(client, strconv.Itoa(matchCommand.Name), message.Seq)
 		break
 	case PLAYER_PLAYCARD: // 一局游戏内消息，每一项单独处理
 		gameServer.playGame(client, message)
@@ -40,7 +52,7 @@ func (gameServer *GameServer) handleMsg(client *Client, message *Message) {
 
 // 进入匹配队列，尝试匹配
 func (gameServer *GameServer) matchPlayer(client *Client, name string, seq int) {
-
+	log.Printf("user %s try match", name)
 }
 
 // 单局游戏内消息

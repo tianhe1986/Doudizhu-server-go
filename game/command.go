@@ -17,3 +17,18 @@ type GiveCardCommand struct {
 	RoomdId int `json:"roomId"`
 	Cards []int `json:"cards"`
 }
+
+type CurrentCards struct {
+	Type CardType `json:"type"`
+	Header int `json:"header"`
+	Cards []int `json:"cards"`
+}
+
+// 状态变化command
+type StateChangeCommand struct {
+	State int `json:"state"`
+	CurPlayerIndex int `json:"curPlayerIndex"`
+	CurCards CurrentCards `json:"curCards"`
+	Scores map[int]int `json:"scores"`
+	NowScore int `json:"nowScore"`
+}

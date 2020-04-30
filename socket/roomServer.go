@@ -26,13 +26,10 @@ type RoomServer struct {
 	dzCards [3]int
 
 	// 当前抢地主/出牌玩家
-	nowPlayer int
+	curPlayerIndex int
 
 	// 当前最大牌情况，座位，牌型，牌型中的头牌，具体牌
-	nowMaxPlayer int
-	nowMaxType   int
-	nowMaxHeader int
-	nowMaxCards  [20]int
+	curCards game.CurrentCards
 
 	// 地主座位
 	dizhu int
@@ -45,12 +42,18 @@ type RoomServer struct {
 
 	// 当前由于炸弹而翻倍的次数
 	bombTimes int
+
+	// 得分情况
+	scores map[int]int
 }
 
 func NewRoomServer() *RoomServer {
 	// TODO: 做一些实际初始化的事
 	return &RoomServer{
+		curPlayerIndex: 1,
 		players: make([]RoomPlayItem, 3),
+		curCards: game.CurrentCards{},
+		scores: make(map[int]int),
 	}
 }
 
@@ -83,13 +86,55 @@ func (roomServer *RoomServer) InitGame() {
 		tempMsg, _ := json.Marshal(msg)
 		roomServer.players[i].ws.send  <- tempMsg
 	}
+
+	roomServer.changeState(3)
 }
 
-func (roomServer *RoomServer) sendToOnepLayer(index int, data Message) {
+// 状态变更  2是结算，1是游戏中, 3是抢地主
+func (roomServer *RoomServer) changeState(state int) {
+	stateChangeCommand := game.StateChangeCommand{
+		State: state,
+	}
+	msg := Message{}
+	switch (state) {
+	case 1:
+		stateChangeCommand.CurPlayerIndex = roomServer.curPlayerIndex
+		stateChangeCommand.CurCards = roomServer.curCards
+		msg.Command = PLAY_GAME
+		break;
+	case 2:
+		stateChangeCommand.Scores = roomServer.scores
+		msg.Command = PLAY_GAME
+		break;
+	case 3:
+		roomServer.curPlayerIndex = rand.Intn(3) + 1
+		stateChangeCommand.CurPlayerIndex = roomServer.curPlayerIndex
+		stateChangeCommand.NowScore = 0
+		msg.Command = PLAYER_WANTDIZHU
+		break;
+	default:
+		return;
+	}
+
+	msg.Content, _ = json.Marshal(stateChangeCommand)
+	roomServer.sendToRoomPlayers(msg)
+}
+
+// 给房间内单个用户发送消息
+func (roomServer *RoomServer) sendToOnePlayer(index int, data Message) {
 	jsonData, _ := json.Marshal(data)
 	roomServer.players[index - 1].ws.send <- jsonData
 }
 
+// 给房间内所有用户发送消息
+func (roomServer *RoomServer) sendToRoomPlayers(data Message) {
+	jsonData, _ := json.Marshal(data)
+	for i := 0; i < len(roomServer.players); i++ {
+		roomServer.players[i].ws.send <- jsonData
+	}
+}
+
+// 拿到一副新好的牌
 func (roomServer *RoomServer) getNewCards54() []int {
 	cards := make([]int, 54)
 	for i := 0; i < 54; i++ {

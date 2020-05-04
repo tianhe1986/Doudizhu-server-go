@@ -29,7 +29,7 @@ type RoomServer struct {
 	curPlayerIndex int
 
 	// 当前最大牌情况，座位，牌型，牌型中的头牌，具体牌
-	curCards game.CurrentCards
+	curCard game.CurrentCard
 
 	// 地主座位
 	dizhu int
@@ -52,7 +52,11 @@ func NewRoomServer() *RoomServer {
 	return &RoomServer{
 		curPlayerIndex: 1,
 		players: make([]RoomPlayItem, 3),
-		curCards: game.CurrentCards{},
+		curCard: game.CurrentCard{
+			Type: game.NO_CARDS,
+			Header: 0,
+			Cards: nil,
+		},
 		scores: make(map[int]int),
 	}
 }
@@ -99,7 +103,7 @@ func (roomServer *RoomServer) changeState(state int) {
 	switch (state) {
 	case 1:
 		stateChangeCommand.CurPlayerIndex = roomServer.curPlayerIndex
-		stateChangeCommand.CurCards = roomServer.curCards
+		stateChangeCommand.CurCard = roomServer.curCard
 		msg.Command = PLAY_GAME
 		break;
 	case 2:
@@ -117,6 +121,98 @@ func (roomServer *RoomServer) changeState(state int) {
 	}
 
 	msg.Content, _ = json.Marshal(stateChangeCommand)
+	roomServer.sendToRoomPlayers(msg)
+}
+
+// 处理抢地主消息
+func (roomServer *RoomServer) handleWantDizhu(message *Message) {
+	seq := message.Seq
+
+	wantDizhuCommand := game.WantDizhuInputCommand{}
+
+	// 这里解析肯定是成功的，不然传不进来
+	json.Unmarshal(message.Content, &wantDizhuCommand)
+
+	score := wantDizhuCommand.Score
+	index := wantDizhuCommand.Index
+	roomServer.wantDizhuTimes++;
+
+	// 发送ack
+	ackMsg := Message{}
+	ackMsg.Command = PLAYER_WANTDIZHU
+	ackMsg.Seq = seq
+	ackMsg.Code = 0
+	roomServer.sendToOnePlayer(index, ackMsg)
+
+	if (score == 3) { // 直接喊3分，成为地主
+		roomServer.dizhuScore = score
+
+		roomServer.giveDzCards(index - 1)
+		roomServer.dizhu = index
+		roomServer.curPlayerIndex = index
+		// 告知地主结果
+		roomServer.notifyDizhuResult()
+
+		// 状态变更
+		roomServer.changeState(1)
+		return
+	} else if (score > roomServer.dizhuScore) { // 叫了个更高分，更新
+		roomServer.dizhuScore = score
+		roomServer.dizhu = index
+	}
+
+	// 如果是第三次，表示每个人都表过态了
+	if (roomServer.wantDizhuTimes == 3) {
+		roomServer.giveDzCards(roomServer.dizhu - 1)
+		roomServer.curPlayerIndex = roomServer.dizhu
+		// 告知地主结果
+		roomServer.notifyDizhuResult()
+
+		// 状态变更
+		roomServer.changeState(1)
+	} else { // 继续问下一个人
+		roomServer.addCurIndex()
+
+		command := game.WantDizhuOutputCommand{
+			State: 3,
+			CurPlayerIndex: roomServer.curPlayerIndex,
+			NowScore: roomServer.dizhuScore,
+		}
+		msg := Message{}
+
+		msg.Command = PLAYER_WANTDIZHU
+		msg.Content, _ = json.Marshal(command)
+		roomServer.sendToRoomPlayers(msg)
+	}
+}
+
+// 下一个座位
+func (roomServer *RoomServer) addCurIndex() {
+	roomServer.curPlayerIndex++;
+	if (roomServer.curPlayerIndex > 3) {
+		roomServer.curPlayerIndex = 1; //每次到4就变回1
+	}
+}
+
+// 将底牌给地主
+func (roomServer *RoomServer) giveDzCards(index int) {
+	for i := 0; i < 3; i++ {
+		roomServer.playerCards[index][17 + i] = roomServer.dzCards[i]
+	}
+}
+
+// 通知抢地主结果
+func (roomServer *RoomServer) notifyDizhuResult() {
+	dizhuResultCommand := game.DizhuResultCommand{
+		State: 3,
+		Dizhu: roomServer.curPlayerIndex,
+		DizhuCards: roomServer.dzCards[0:],
+		NowScore: roomServer.dizhuScore,
+	}
+
+	msg := Message{}
+	msg.Command = PLAYER_WANTDIZHU
+	msg.Content, _ = json.Marshal(dizhuResultCommand)
 	roomServer.sendToRoomPlayers(msg)
 }
 

@@ -59,6 +59,7 @@ func (gameServer *GameServer) handleMsg(client *Client, message *Message) {
 // 进入匹配队列，尝试匹配
 func (gameServer *GameServer) matchPlayer(client *Client, name string, seq int) {
 	log.Printf("user %s try match", name)
+	// TODO 将client与name进行绑定
 	newMatchItem := MatchItem{
 		ws: client,
 		name: name,
@@ -121,5 +122,14 @@ func (gameServer *GameServer) playGame(client *Client, message *Message) {
 
 // 抢地主消息
 func (gameServer *GameServer) wantDizhu(client *Client, message *Message) {
+	commonRoomCommand := game.CommonRoomCommand{}
+	err := json.Unmarshal(message.Content, &commonRoomCommand)
 
+	//解析失败会报错。
+	if err != nil {
+		return
+	}
+
+	room := gameServer.rooms[commonRoomCommand.RoomId]
+	room.handleWantDizhu(message)
 }

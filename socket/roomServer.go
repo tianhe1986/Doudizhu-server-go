@@ -28,7 +28,7 @@ type RoomServer struct {
 	// 当前抢地主/出牌玩家
 	curPlayerIndex int
 
-	// 当前最大牌情况，座位，牌型，牌型中的头牌，具体牌
+	// 当前最大牌情况，牌型，牌型中的头牌，具体牌
 	curCard game.CurrentCard
 
 	// 地主座位
@@ -42,6 +42,12 @@ type RoomServer struct {
 
 	// 当前由于炸弹而翻倍的次数
 	bombTimes int
+
+	// 当前牌最大的位置
+	nowBigger int
+
+	// 当前有几个人过牌
+	passNum int
 
 	// 得分情况
 	scores map[int]int
@@ -124,14 +130,179 @@ func (roomServer *RoomServer) changeState(state int) {
 	roomServer.sendToRoomPlayers(msg)
 }
 
+// 处理出牌消息
+func (roomServer *RoomServer) handlePlayCard(message *Message) {
+	seq := message.Seq
+
+	playCardCommand := game.PlayCardInCommand{}
+
+	// Todo: 发送错误返回？
+	err := json.Unmarshal(message.Content, &playCardCommand)
+	if err != nil {
+		return
+	}
+
+	index := playCardCommand.Index
+
+	curCard := playCardCommand.CurCard;
+	if (len(curCard.Cards) > 0) {
+		// TODO: 判断是否符合出牌规则
+
+		// 移除手中的牌
+		roomServer.removeCards(index - 1, curCard.Cards)
+	}
+
+	// 告知玩家出牌成功
+	ackMsg := Message{}
+	ackMsg.Command = PLAYER_PLAYCARD
+	ackMsg.Seq = seq
+	ackMsg.Code = 0
+	roomServer.sendToOnePlayer(index, ackMsg)
+
+	if curCard.Type != game.PASS_CARDS { // 如果不是过牌，处理新的最大牌
+		roomServer.curCard = curCard
+		roomServer.passNum = 0
+
+		// 通知本轮出牌，以及下一个应出牌的玩家
+		roomServer.addCurIndex()
+		roomServer.sendNextCardOut()
+	} else {
+		roomServer.passNum++
+		if (1 == roomServer.passNum) {
+			roomServer.nowBigger = roomServer.curPlayerIndex - 1;
+			if (roomServer.nowBigger == 0) {
+				roomServer.nowBigger = 3
+			}
+			roomServer.addCurIndex()
+			roomServer.sendPassMsg()
+		} else { // 不是1就是2
+			roomServer.passNum = 0
+			roomServer.curPlayerIndex = roomServer.nowBigger
+			roomServer.curCard = game.CurrentCard{
+				Type: game.NO_CARDS,
+				Header: 0,
+				Cards: nil,
+			}
+			roomServer.nowBigger = 0
+			roomServer.sendNextCardOut()
+		}
+	}
+}
+
+func (roomServer *RoomServer) sendPassMsg() {
+	passCurCard := game.CurrentCard{
+		Type: game.PASS_CARDS,
+		Header: 0,
+		Cards: nil,
+	}
+
+	cardOutCommand := game.CardOutCommand{
+		State: 1,
+		CurPlayerIndex: roomServer.curPlayerIndex,
+		CurCard: passCurCard,
+	}
+
+	msg := Message{}
+	msg.Command = PLAY_GAME
+	msg.Content, _ = json.Marshal(cardOutCommand)
+	roomServer.sendToRoomPlayers(msg)
+}
+
+func (roomServer *RoomServer) sendNextCardOut() {
+	cardOutCommand := game.CardOutCommand{
+		State: 1,
+		CurPlayerIndex: roomServer.curPlayerIndex,
+		CurCard: roomServer.curCard,
+	}
+
+	msg := Message{}
+	msg.Command = PLAY_GAME
+	msg.Content, _ = json.Marshal(cardOutCommand)
+	roomServer.sendToRoomPlayers(msg)
+}
+
+// 移除牌
+func (roomServer *RoomServer) removeCards(index int, cards []int) bool {
+	cardGroup := &roomServer.playerCards[index]
+
+	var haveHard bool
+	for i, length := 0, len(cards); i < length; i++ {
+		haveHard = false
+
+		for j := 0; j < 20; j++ {
+			if (cards[i] == cardGroup[j]) { // 清除对应的牌
+				haveHard = true
+				cardGroup[j] = 0
+				break
+			}
+		}
+
+		if ( ! haveHard) {
+			return false
+		}
+	}
+
+	// 检查是否出完牌了
+	hasOut := true
+	for j := 0; j < 20; j++ {
+		if (0 != cardGroup[j]) {
+			hasOut = false
+			break
+		}
+	}
+
+	if (hasOut) {
+		roomServer.countScore(index + 1)
+		roomServer.changeState(2)
+	}
+
+	return true
+}
+
+// 算分
+func (roomServer *RoomServer) countScore(winIndex int) {
+	// 喊地主分
+	score := roomServer.dizhuScore
+
+	// 翻倍
+	for i := 0; i < roomServer.bombTimes; i++ {
+		score = score * 2
+	}
+
+	other1 := winIndex - 1
+	if (other1 == 0) {
+		other1 = 3
+	}
+
+	other2 := winIndex + 1
+	if (other2 == 4) {
+		other2 = 1
+	}
+
+	dizhu := roomServer.dizhu
+	if (winIndex == dizhu) { // 胜者是地主
+		roomServer.scores[other1] = -score
+		roomServer.scores[other2] = -score
+		roomServer.scores[dizhu] = 2 * score
+	} else {
+		roomServer.scores[other1] = score
+		roomServer.scores[other2] = score
+		roomServer.scores[winIndex] = score
+		roomServer.scores[dizhu] = -2 * score
+	}
+}
+
 // 处理抢地主消息
 func (roomServer *RoomServer) handleWantDizhu(message *Message) {
 	seq := message.Seq
 
 	wantDizhuCommand := game.WantDizhuInputCommand{}
 
-	// 这里解析肯定是成功的，不然传不进来
-	json.Unmarshal(message.Content, &wantDizhuCommand)
+	// Todo: 发送错误返回？
+	err := json.Unmarshal(message.Content, &wantDizhuCommand)
+	if err != nil {
+		return
+	}
 
 	score := wantDizhuCommand.Score
 	index := wantDizhuCommand.Index

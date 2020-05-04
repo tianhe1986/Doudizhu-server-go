@@ -117,7 +117,16 @@ func (gameServer *GameServer) matchPlayer(client *Client, name string, seq int) 
 
 // 单局游戏内消息
 func (gameServer *GameServer) playGame(client *Client, message *Message) {
+	commonRoomCommand := game.CommonRoomCommand{}
+	err := json.Unmarshal(message.Content, &commonRoomCommand)
 
+	//解析失败会报错。
+	if err != nil {
+		return
+	}
+
+	room := gameServer.rooms[commonRoomCommand.RoomId]
+	room.handlePlayCard(message)
 }
 
 // 抢地主消息

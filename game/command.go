@@ -59,3 +59,17 @@ type DizhuResultCommand struct {
 	DizhuCards []int `json:"dizhuCards"`
 	NowScore int `json:"nowScore"`
 }
+
+// 玩家上传的出牌消息
+type PlayCardInCommand struct {
+	RoomId int `json:"roomId"`
+	Index int `json:"index"`
+	CurCard CurrentCard `json:"curCards"`
+}
+
+// 出牌消息
+type CardOutCommand struct {
+	State int `json:"state"`
+	CurPlayerIndex int `json:"curPlayerIndex"`
+	CurCard CurrentCard `json:"curCard"`
+}

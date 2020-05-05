@@ -96,6 +96,7 @@ func (gameServer *GameServer) matchPlayer(client *Client, name string, seq int) 
 		resultContent.Players = names
 		resultContent.RoomId = gameServer.roomIndex
 		for i := 0; i < 3; i++ {
+			players[i].ws.roomId = gameServer.roomIndex
 			resp := Message{}
 			resp.Code = 0
 			resp.Command = MATCH_PLAYER
@@ -141,4 +142,33 @@ func (gameServer *GameServer) wantDizhu(client *Client, message *Message) {
 
 	room := gameServer.rooms[commonRoomCommand.RoomId]
 	room.handleWantDizhu(message)
+}
+
+// 退出队列
+func (gameServer *GameServer) exitQueue(client *Client) {
+	tempItem := gameServer.queue.Front()
+
+	for ; tempItem != nil; tempItem = tempItem.Next() {
+		p, ok := tempItem.Value.(MatchItem);
+		if ! ok {
+			continue
+		}
+
+		if p.ws == client {
+			gameServer.queue.Remove(tempItem)
+			return
+		}
+	}
+}
+
+// 解散房间
+func (gameServer *GameServer) exitRoom(roomId int) {
+	room, ok := gameServer.rooms[roomId]
+
+	if ok {
+		room.exit()
+
+		// 删除房间
+		delete(gameServer.rooms, roomId)
+	}
 }

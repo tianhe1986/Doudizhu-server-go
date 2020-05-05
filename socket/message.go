@@ -15,7 +15,7 @@ const (
 	ROOM_NOTIFY      MessageCode = 6
 	PLAYER_PLAYCARD  MessageCode = 7
 	PLAYER_WANTDIZHU MessageCode = 8
-	WS_CLOSE         MessageCode = 9
+	ROOM_EXIT         MessageCode = 9
 )
 
 type Message struct {

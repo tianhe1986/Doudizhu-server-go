@@ -254,6 +254,7 @@ func (roomServer *RoomServer) removeCards(index int, cards []int) bool {
 	if (hasOut) {
 		roomServer.countScore(index + 1)
 		roomServer.changeState(2)
+		roomServer.exit()
 	}
 
 	return true
@@ -399,6 +400,17 @@ func (roomServer *RoomServer) sendToRoomPlayers(data Message) {
 	for i := 0; i < len(roomServer.players); i++ {
 		roomServer.players[i].ws.send <- jsonData
 	}
+}
+
+// 退出房间
+func (roomServer *RoomServer) exit() {
+	for i := 0; i < len(roomServer.players); i++ {
+		roomServer.players[i].ws.roomId = 0
+	}
+
+	msg := Message{}
+	msg.Command = ROOM_EXIT
+	roomServer.sendToRoomPlayers(msg)
 }
 
 // 拿到一副新好的牌

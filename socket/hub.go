@@ -38,7 +38,11 @@ func (h *Hub) Run() {
 		case client := <-h.register: // 新增连接
 			h.clients[client] = true
 		case client := <-h.unregister: // 关闭连接
-			if _, ok := h.clients[client]; ok { // TODO: 从排队队列中移除
+			if _, ok := h.clients[client]; ok {
+				// 从队列中移除
+				gameServer.exitQueue(client)
+				// 从房间中退出
+				gameServer.exitRoom(client.roomId)
 				delete(h.clients, client)
 				close(client.send)
 			}

@@ -5,6 +5,7 @@ import (
 	"container/list"
 	"encoding/json"
 	"log"
+	"math/rand"
 	"strconv"
 )
 
@@ -20,16 +21,12 @@ type GameServer struct {
 
 	// 房间map
 	rooms map[int]*RoomServer
-
-	// 当前最小可用房间编号
-	roomIndex int
 }
 
 func NewGameServer() *GameServer {
 	return &GameServer{
 		queue:     list.New(),
 		rooms:     make(map[int]*RoomServer),
-		roomIndex: 1,
 	}
 }
 
@@ -91,12 +88,21 @@ func (gameServer *GameServer) matchPlayer(client *Client, name string, seq int) 
 			roomPlayers[i] = playItem
 		}
 
+		// 随机生成房间号
+		var roomIndex int
+		var hasRepeat bool = true
+
+		for ; hasRepeat ; {
+			roomIndex = rand.Intn(10000000) + 1
+			_, hasRepeat = gameServer.rooms[roomIndex]
+		}
+
 		// 发送匹配成功消息
 		resultContent := game.MatchResultCommand{}
 		resultContent.Players = names
-		resultContent.RoomId = gameServer.roomIndex
+		resultContent.RoomId = roomIndex
 		for i := 0; i < 3; i++ {
-			players[i].ws.roomId = gameServer.roomIndex
+			players[i].ws.roomId = roomIndex
 			resp := Message{}
 			resp.Code = 0
 			resp.Command = MATCH_PLAYER
@@ -108,9 +114,8 @@ func (gameServer *GameServer) matchPlayer(client *Client, name string, seq int) 
 		}
 
 		room := NewRoomServer()
-		room.roomId = gameServer.roomIndex;
+		room.roomId = roomIndex;
 		room.players = roomPlayers
-		gameServer.roomIndex++;
 		gameServer.rooms[room.roomId] = room
 		room.InitGame()
 	}

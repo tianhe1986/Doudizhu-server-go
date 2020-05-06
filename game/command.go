@@ -18,7 +18,7 @@ type GiveCardCommand struct {
 	Cards []int `json:"cards"`
 }
 
-type CurrentCard struct {
+type CardSet struct {
 	Type CardType `json:"type"`
 	Header int `json:"header"`
 	Cards []int `json:"cards"`
@@ -28,7 +28,7 @@ type CurrentCard struct {
 type StateChangeCommand struct {
 	State int `json:"state"`
 	CurPlayerIndex int `json:"curPlayerIndex"`
-	CurCard CurrentCard `json:"curCard"`
+	CurCard CardSet `json:"curCard"`
 	Scores map[int]int `json:"scores"`
 	NowScore int `json:"nowScore"`
 }
@@ -64,12 +64,12 @@ type DizhuResultCommand struct {
 type PlayCardInCommand struct {
 	RoomId int `json:"roomId"`
 	Index int `json:"index"`
-	CurCard CurrentCard `json:"curCards"`
+	CurCard CardSet `json:"curCards"`
 }
 
 // 出牌消息
 type CardOutCommand struct {
 	State int `json:"state"`
 	CurPlayerIndex int `json:"curPlayerIndex"`
-	CurCard CurrentCard `json:"curCard"`
+	CurCard CardSet `json:"curCard"`
 }

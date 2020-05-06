@@ -16,6 +16,9 @@ type RoomServer struct {
 	// 房间id
 	roomId int
 
+	// 扑克逻辑处理
+	pokerLogic *game.PokerLogic
+
 	// 玩家列表
 	players []RoomPlayItem
 
@@ -29,7 +32,7 @@ type RoomServer struct {
 	curPlayerIndex int
 
 	// 当前最大牌情况，牌型，牌型中的头牌，具体牌
-	curCard game.CurrentCard
+	curCard game.CardSet
 
 	// 地主座位
 	dizhu int
@@ -57,8 +60,9 @@ func NewRoomServer() *RoomServer {
 	// TODO: 做一些实际初始化的事
 	return &RoomServer{
 		curPlayerIndex: 1,
+		pokerLogic: &game.PokerLogic{},
 		players: make([]RoomPlayItem, 3),
-		curCard: game.CurrentCard{
+		curCard: game.CardSet{
 			Type: game.NO_CARDS,
 			Header: 0,
 			Cards: nil,
@@ -146,18 +150,44 @@ func (roomServer *RoomServer) handlePlayCard(message *Message) {
 
 	curCard := playCardCommand.CurCard;
 	if (len(curCard.Cards) > 0) {
-		// TODO: 判断是否符合出牌规则
+		// 判断是否符合出牌规则
+
+		// 牌型检查
+		cardType := roomServer.pokerLogic.CalcuPokerType(curCard.Cards)
+		if cardType != curCard.Type { // 计算出的牌型与传过来的不匹配
+			//log.Printf("计算出的类型为 %d,传过来的为 %d", cardType, curCard.Type)
+			// 告知玩家出牌失败
+			roomServer.sendAck(PLAYER_PLAYCARD, index, seq, -2)
+			return
+		}
+
+		// 头牌检查
+		cardHeader := roomServer.pokerLogic.CalcuPokerHeader(curCard.Cards, curCard.Type)
+		if cardHeader != curCard.Header { // 计算出的头牌与传过来的不匹配
+			//log.Printf("计算出的头牌为 %d,传过来的为 %d", cardHeader, curCard.Header)
+			// 告知玩家出牌失败
+			roomServer.sendAck(PLAYER_PLAYCARD, index, seq, -2)
+			return
+		}
+
+		// 是否可出牌检查
+		if ! roomServer.pokerLogic.CanOut(&curCard, &roomServer.curCard) {
+			//log.Printf("当前牌型为 %d, 头牌为 %d", roomServer.curCard.Type, roomServer.curCard.Header)
+			//log.Printf("新来的牌型为 %d, 头牌为 %d", curCard.Type, curCard.Header)
+			roomServer.sendAck(PLAYER_PLAYCARD, index, seq, -3)
+			return
+		}
 
 		// 移除手中的牌
-		roomServer.removeCards(index - 1, curCard.Cards)
+		if ! roomServer.removeCards(index - 1, curCard.Cards) {
+			// 告知玩家出牌失败
+			roomServer.sendAck(PLAYER_PLAYCARD, index, seq, -1)
+			return
+		}
 	}
 
 	// 告知玩家出牌成功
-	ackMsg := Message{}
-	ackMsg.Command = PLAYER_PLAYCARD
-	ackMsg.Seq = seq
-	ackMsg.Code = 0
-	roomServer.sendToOnePlayer(index, ackMsg)
+	roomServer.sendAck(PLAYER_PLAYCARD, index, seq, 0)
 
 	if curCard.Type != game.PASS_CARDS { // 如果不是过牌，处理新的最大牌
 		roomServer.curCard = curCard
@@ -178,7 +208,7 @@ func (roomServer *RoomServer) handlePlayCard(message *Message) {
 		} else { // 不是1就是2
 			roomServer.passNum = 0
 			roomServer.curPlayerIndex = roomServer.nowBigger
-			roomServer.curCard = game.CurrentCard{
+			roomServer.curCard = game.CardSet{
 				Type: game.NO_CARDS,
 				Header: 0,
 				Cards: nil,
@@ -189,8 +219,17 @@ func (roomServer *RoomServer) handlePlayCard(message *Message) {
 	}
 }
 
+func (roomServer *RoomServer) sendAck(command MessageCode, index int, seq int, code int) {
+	ackMsg := Message{}
+	ackMsg.Command = command
+	ackMsg.Seq = seq
+	ackMsg.Code = code
+	roomServer.sendToOnePlayer(index, ackMsg)
+	return
+}
+
 func (roomServer *RoomServer) sendPassMsg() {
-	passCurCard := game.CurrentCard{
+	passCurCard := game.CardSet{
 		Type: game.PASS_CARDS,
 		Header: 0,
 		Cards: nil,
@@ -310,11 +349,7 @@ func (roomServer *RoomServer) handleWantDizhu(message *Message) {
 	roomServer.wantDizhuTimes++;
 
 	// 发送ack
-	ackMsg := Message{}
-	ackMsg.Command = PLAYER_WANTDIZHU
-	ackMsg.Seq = seq
-	ackMsg.Code = 0
-	roomServer.sendToOnePlayer(index, ackMsg)
+	roomServer.sendAck(PLAYER_WANTDIZHU, index, seq, 0)
 
 	if (score == 3) { // 直接喊3分，成为地主
 		roomServer.dizhuScore = score

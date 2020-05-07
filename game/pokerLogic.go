@@ -83,7 +83,30 @@ func (p *PokerLogic) CalcuPokerType(cards []int) CardType {
 			}
 		}
 
-		// TODO: 四带两对，连续四带二
+		// 四带两对
+		if length == 8 {
+			if maxSameNum == 4 {
+				twoPoints := p.GetSameNumPoints(points, 2)
+				if len(twoPoints) == 2 {
+					return BOMB_FOUR_CARD
+				}
+			}
+		}
+		// 连续四带二
+		if length % 6 == 0 {
+			fourPoints := p.GetSameNumPoints(points, 4)
+			if len(fourPoints) == length/6 && p.IsStraight(fourPoints) && fourPoints[len(fourPoints) - 1] < 15 {
+				return BOMB_TWO_STRAIGHT_CARD
+			}
+		}
+		// 连续四带两对
+		if length % 8 == 0 {
+			fourPoints := p.GetSameNumPoints(points, 4)
+			twoPoints := p.GetSameNumPoints(points, 2)
+			if len(twoPoints) == 2 * len(fourPoints) && len(fourPoints) == length/8 && p.IsStraight(fourPoints) && fourPoints[len(fourPoints) - 1] < 15 {
+				return BOMB_FOUR_STRAIGHT_CARD
+			}
+		}
 	}
 
 	// 没有这个牌型的

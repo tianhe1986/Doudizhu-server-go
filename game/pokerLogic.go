@@ -230,6 +230,8 @@ func (p *PokerLogic) CalcuPokerHeader(cards []int, cardType CardType) int {
 		return points[2]
 	case AIRCRAFT_CARD,AIRCRAFT_WING:
 		return p.FirstPoint(points, 3)
+	case BOMB_FOUR_CARD, BOMB_TWO_STRAIGHT_CARD,BOMB_FOUR_STRAIGHT_CARD:
+		return p.FirstPoint(points, 4)
 	}
 
 	return 0

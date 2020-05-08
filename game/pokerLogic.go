@@ -59,9 +59,9 @@ func (p *PokerLogic) CalcuPokerType(cards []int) CardType {
 
 		// 飞机三带一
 		if length % 4 == 0 {
-			// 获得所有数量为3的点数
-			threePoints := p.GetSameNumPoints(points, 3)
-			if len(threePoints) == length/4 && p.IsStraight(threePoints) && threePoints[len(threePoints) - 1] < 15 {
+			// 连续3张的数量占了length/4 以上
+			threePoints := p.GetSameNumMaxStraightPoints(points, 3)
+			if len(threePoints) >= length/4 && threePoints[length/4 - 1] < 15 {
 				return AIRCRAFT_CARD
 			}
 		}
@@ -86,24 +86,32 @@ func (p *PokerLogic) CalcuPokerType(cards []int) CardType {
 		// 四带两对
 		if length == 8 {
 			if maxSameNum == 4 {
-				twoPoints := p.GetSameNumPoints(points, 2)
-				if len(twoPoints) == 2 {
+				// 必须没有一张和三张的出现
+				onePoints := p.GetSameNumPoints(points, 1)
+				threePoints := p.GetSameNumPoints(points, 3)
+
+				// TODO： 33334444 这样的到底算连续三带一还是四带两对？
+				if len(onePoints) == 0 && len(threePoints) == 0 {
 					return BOMB_FOUR_CARD
 				}
 			}
 		}
 		// 连续四带二
 		if length % 6 == 0 {
-			fourPoints := p.GetSameNumPoints(points, 4)
-			if len(fourPoints) == length/6 && p.IsStraight(fourPoints) && fourPoints[len(fourPoints) - 1] < 15 {
+			fourPoints := p.GetSameNumMaxStraightPoints(points, 4)
+			if len(fourPoints) >= length/6 && fourPoints[length/6 - 1] < 15 {
 				return BOMB_TWO_STRAIGHT_CARD
 			}
 		}
 		// 连续四带两对
 		if length % 8 == 0 {
-			fourPoints := p.GetSameNumPoints(points, 4)
-			twoPoints := p.GetSameNumPoints(points, 2)
-			if len(twoPoints) == 2 * len(fourPoints) && len(fourPoints) == length/8 && p.IsStraight(fourPoints) && fourPoints[len(fourPoints) - 1] < 15 {
+			fourPoints := p.GetSameNumMaxStraightPoints(points, 4)
+
+			// 其他的都必须是成对，因此检查是否没有单张和三张的出现即可
+			onePoints := p.GetSameNumPoints(points, 1)
+			threePoints := p.GetSameNumPoints(points, 3)
+
+			if len(fourPoints) >= length/8 && len(onePoints) == 0 && len(threePoints) == 0 && fourPoints[length/8 - 1] < 15 {
 				return BOMB_FOUR_STRAIGHT_CARD
 			}
 		}
@@ -140,6 +148,77 @@ func (p *PokerLogic) GetSameNumPoints(points []int, num int) []int {
 	}
 
 	return newPoints[0:pointIndex]
+}
+
+// 取出所有点数数量大于等于num的点数
+// 例如，现在牌中有3个3，3个4，2个5，1个6， 取出数量大于等于3的点数，则返回[3, 4]，取出数量大于等于2的点数，则返回[3, 4, 5]，取出数量大于等于1的点数，则返回[3, 4, 5, 6]
+func (p *PokerLogic) GetGeNumPoints(points []int, num int) []int {
+	length := len(points)
+	newPoints := make([]int, length)
+	pointIndex := 0
+
+	nowNum := 1
+
+	for i := 1; i < length; i++ {
+		if points[i] == points[i-1] { // 与前一张相同
+			nowNum++
+		} else { // 与前一张不同，若前一张出现大于等于num次，加入数组
+			if nowNum >= num {
+				newPoints[pointIndex] = points[i-1]
+				pointIndex++
+			}
+			nowNum = 1
+		}
+	}
+
+	if nowNum >= num {
+		newPoints[pointIndex] = points[length-1]
+		pointIndex++
+	}
+
+	return newPoints[0:pointIndex]
+}
+
+// 从所有点数数量大于等于num的列表中，取出最长连续递增子列表
+func (p *PokerLogic) GetSameNumMaxStraightPoints(points []int, num int) []int {
+	geNumPoints := p.GetGeNumPoints(points, num)
+
+	// 没有，直接返回
+	length := len(geNumPoints)
+	if length == 0 {
+		return geNumPoints
+	}
+
+	maxStartPoint := geNumPoints[0]
+	maxNum := 1
+
+	nowStartPoint := geNumPoints[0]
+	nowNum := 1
+
+	for i := 1; i < length; i++ {
+		if geNumPoints[i] == geNumPoints[i-1] + 1 {// 比上一张多1
+			nowNum++;
+		} else { // 重新开始计算
+			if (nowNum > maxNum) {
+				maxNum = nowNum;
+				maxStartPoint = nowStartPoint;
+			}
+			nowNum = 1;
+			nowStartPoint = geNumPoints[i];
+		}
+	}
+
+	if (nowNum > maxNum) {
+		maxNum = nowNum;
+		maxStartPoint = nowStartPoint;
+	}
+
+	newPoints := make([]int, maxNum)
+	for i := 0; i < maxNum; i++ {
+		newPoints[i] = maxStartPoint + i
+	}
+
+	return newPoints
 }
 
 // 是否是顺子
@@ -228,10 +307,17 @@ func (p *PokerLogic) CalcuPokerHeader(cards []int, cardType CardType) int {
 		return points[0]
 	case THREE_ONE_CARD,THREE_TWO_CARD,BOMB_TWO_CARD:
 		return points[2]
-	case AIRCRAFT_CARD,AIRCRAFT_WING:
+	case AIRCRAFT_CARD: // 连续三带一
+		threePoints := p.GetSameNumMaxStraightPoints(points, 3)
+		return threePoints[0]
+	case AIRCRAFT_WING: // 连续三带二
 		return p.FirstPoint(points, 3)
-	case BOMB_FOUR_CARD, BOMB_TWO_STRAIGHT_CARD,BOMB_FOUR_STRAIGHT_CARD:
-		return p.FirstPoint(points, 4)
+	case BOMB_FOUR_CARD: // 四带两对
+		fourPoints := p.GetSameNumPoints(points, 4)
+		return fourPoints[len(fourPoints) - 1]
+	case BOMB_TWO_STRAIGHT_CARD,BOMB_FOUR_STRAIGHT_CARD:
+		fourPoints := p.GetSameNumMaxStraightPoints(points, 4)
+		return fourPoints[0]
 	}
 
 	return 0
